@@ -34,12 +34,12 @@ def generate_groundtruth():
         data.to_csv(os.path.join(ground_truth_dir, str(id) + '.csv'))
 
 
-def evaluate_avg(pred_dir='./Shenghui_centralized_model', ground_dir=ground_truth_dir,
+def evaluate_avg(pred_dir='./ta_best', ground_dir=ground_truth_dir,
                  pollutants=["NO2", "NOX as NO2", "PM10", "PM2.5"]):
     scores = []
-    for id in utils.STATIONS:
+    for id in utils.STATIONS[:2]:
         actual_data = pd.read_csv(os.path.join(ground_dir, str(id) + '.csv'))
-        pred_data = pd.read_csv(os.path.join(pred_dir, str(id) + '.csv'))
+        pred_data = pd.read_csv(glob.glob(os.path.join(pred_dir, "data", '*' + str(id) + '*.csv'))[0])
         actual_data["Start"] = pd.to_datetime(actual_data["Start"])
         pred_data = pred_data[['Start'] + pollutants]
         actual_data = actual_data[['Start'] + pollutants]
@@ -57,4 +57,4 @@ def evaluate_avg(pred_dir='./Shenghui_centralized_model', ground_dir=ground_trut
 
 if __name__ == "__main__":
     # generate_groundtruth()
-    evaluate_avg(pollutants=['PM10'])
+    evaluate_avg(pred_dir='ta_best', pollutants=["NO2", "NOX as NO2", "PM10", "PM2.5"])

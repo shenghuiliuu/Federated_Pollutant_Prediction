@@ -25,8 +25,8 @@ for id in utils.STATIONS:
 
 # %%
 
-test_index = pd.to_datetime("2019-10-01 00:00:00")
-val_index = pd.to_datetime("2019-6-01 00:00:00")
+test_index = pd.to_datetime("2019-09-29 00:00:00")
+val_index = pd.to_datetime("2019-5-01 00:00:00")
 s = list(stations.values())[0]
 
 # %%
@@ -62,17 +62,17 @@ multi_window = WindowGenerator(input_width=IN_STEPS,
                                val_df=[d['val_set'] for d in datasets],
                                label_columns=utils.OUTPUTS)
 
-multi_window.plot(cols=utils.OUTPUTS)
+# multi_window.plot(cols=utils.OUTPUTS)
 
 # %%
 
 multi_val_performance = {}
 multi_performance = {}
 
-MAX_EPOCHS = 30
+MAX_EPOCHS = 0
 
 
-def compile_and_fit(model, window, patience=10, recompile=True):
+def compile_and_fit(model, window, patience=3, recompile=True):
     early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
                                                       patience=patience,
                                                       mode='min')
@@ -94,11 +94,13 @@ def compile_and_fit(model, window, patience=10, recompile=True):
 
 
 # %%
-
+# model.add(LSTM(50, activation='relu',input_shape=(n_timesteps, n_features)))
+#     model.add(Dense(100, activation='relu'))
+#     model.add(Dense(n_outputs*n_out_features))
 multi_lstm_model = tf.keras.Sequential([
     # Shape [batch, time, features] => [batch, lstm_units]
     # Adding more `lstm_units` just overfits more quickly.
-    tf.keras.layers.LSTM(64, return_sequences=False),
+    tf.keras.layers.LSTM(128, return_sequences=False),
     # Shape => [batch, out_steps*features]
     tf.keras.layers.Dense(OUT_STEPS * NUM_OUTPUTS,
                           kernel_initializer=tf.initializers.zeros),
@@ -109,7 +111,7 @@ multi_lstm_model = tf.keras.Sequential([
 history = compile_and_fit(multi_lstm_model, multi_window)
 
 multi_val_performance['LSTM'] = multi_lstm_model.evaluate(multi_window.val)
-multi_performance['LSTM'] = multi_lstm_model.evaluate(multi_window.test, verbose=1)
+# multi_performance['LSTM'] = multi_lstm_model.evaluate(multi_window.test, verbose=1)
 multi_window.plot(multi_lstm_model, cols=utils.OUTPUTS)
 
 # %%
@@ -138,34 +140,20 @@ def smape(actual, predicted):
         np.divide(dividend, denominator, out=np.zeros_like(dividend), where=denominator != 0, casting='unsafe'))
 
 
-pred_dir = "../evaluation/Shenghui_centralized_model/"
+pred_dir = "../evaluation/ta_best/data"
 if os.path.exists(pred_dir):
     rmtree(pred_dir)
 os.makedirs(pred_dir)
 
+# Testing
 smapes = []
-for id in stations:
-    input_time = pd.to_datetime("2019-9-29 00:00:00")
-    inputs = []
-    labels = []
-    while input_time <= pd.to_datetime("2019-12-29 00:00:00"):
-        input = np.array(stations[id][input_time:
-                                      input_time + pd.Timedelta('1 days 23 hours')])
-        label = np.array(
-            stations[id][input_time + pd.Timedelta('2 days'): input_time + pd.Timedelta('2 days 23 hours')])[:,
-                :NUM_OUTPUTS]
-        input_time += pd.Timedelta('1 days')
-        input = (input - np.tile(train_mean, (len(input), 1))) / np.tile(train_std, (len(input), 1))
-        inputs.append(input)
-        labels.append(label)
+for idx, id in enumerate(list(stations.keys())[:2]):
+    test_input, test_act = multi_window.get_test(idx)
+    pred = multi_lstm_model.predict(test_input)
+    pred = pred * np.tile(np.array(train_std[:NUM_OUTPUTS]), (len(pred), 24, 1)) + \
+           np.tile(np.array(train_mean[:NUM_OUTPUTS]), (len(pred), 24, 1))
 
-    labels = np.array(labels)
-    inputs = np.array(inputs)
-    pred = multi_lstm_model.predict(inputs)
-    pred = pred * np.tile(np.array(train_std[:NUM_OUTPUTS]), (len(inputs), 24, 1)) + \
-           np.tile(np.array(train_mean[:NUM_OUTPUTS]), (len(inputs), 24, 1))
-
-    smapes.append(smape(labels, pred))
+    smapes.append(smape(test_act, pred))
     # Write data to csv
     pred_df = pd.DataFrame(columns=["Start"] + utils.OUTPUTS)
     pred_df.set_index("Start", inplace=True)
@@ -174,11 +162,11 @@ for id in stations:
         for j in range(pred.shape[1]):
             pred_df.loc[start_time] = pred[i, j]
             start_time += pd.Timedelta("1 hours")
-    pred_df.to_csv(os.path.join(pred_dir, str(id) + '.csv'))
+    target_path = os.path.join(pred_dir, str(id) + '.csv')
+    pred_df.to_csv(target_path)
+    print('wrote to path ', target_path)
 
-# %%
 
 # print(np.mean(smapes))
-# %%
 
-# evaluate_avg(pred_dir='../Shenghui_centralized_model', ground_dir='../test_data')
+# evaluate_avg(pred_dir='../ta_best', ground_dir='../test_data')

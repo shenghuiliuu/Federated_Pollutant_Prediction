@@ -1,10 +1,10 @@
 import sys
 
 sys.path.append('../preprocess')
-
+import pandas as pd
 import tensorflow as tf
 import numpy as np
-
+import tensorflow_datasets as tfds
 import matplotlib.pyplot as plt
 
 
@@ -61,19 +61,34 @@ class WindowGenerator():
 
         return inputs, labels
 
-    def make_dataset(self, data):
-        data = np.array(data, dtype=np.float32)
-        ds = tf.keras.preprocessing.timeseries_dataset_from_array(
-            data=data,
-            targets=None,
-            sequence_length=self.total_window_size,
-            sequence_stride=1,
-            shuffle=True,
-            batch_size=32, )
-
-        ds = ds.map(self.split_window)
-
-        return ds
+    def make_dataset(self, data, stride=1, batch_size=32, shuffle=True):
+        time = data.index[0]
+        
+        datasets = []
+        while time < data.index[-1]:
+            while time < data.index[-1] and time not in data.index:
+                time += pd.to_timedelta("01:00:00")
+            time_next = time + pd.to_timedelta("01:00:00")
+            while time_next in data.index:
+                time_next += pd.to_timedelta("01:00:00")
+                
+            data_block = data[(data.index >= time) & (data.index < time_next)]
+            time = time_next
+            
+            data_block = np.array(data_block, dtype=np.float32)
+            ds = tf.keras.preprocessing.timeseries_dataset_from_array(
+                data=data_block,
+                targets=None,
+                sequence_length=self.total_window_size,
+                sequence_stride=stride,
+                shuffle=shuffle,
+                batch_size=batch_size, )
+    
+            datasets.append(ds)
+        dataset = datasets[0]
+        for df in datasets[1:]:
+            dataset = dataset.concatenate(df)
+        return dataset.map(self.split_window)
 
     def plot(self, model=None, cols=("PM10",)):
         inputs, labels = self.example
@@ -111,24 +126,23 @@ class WindowGenerator():
 
     @property
     def train(self):
-        data_set = self.make_dataset(self.train_df[0])
+        dataset = self.make_dataset(self.train_df[0])
         for df in self.train_df[1:]:
-            data_set.concatenate(self.make_dataset(df))
-        return data_set
+            dataset = dataset.concatenate(self.make_dataset(df))
+            # trainset = list(dataset.as_numpy_iterator())
+        return dataset
 
     @property
     def val(self):
         data_set = self.make_dataset(self.val_df[0])
         for df in self.val_df[1:]:
-            data_set.concatenate(self.make_dataset(df))
+            data_set = data_set.concatenate(self.make_dataset(df))
         return data_set
 
-    @property
-    def test(self):
-        data_set = self.make_dataset(self.test_df[0])
-        for df in self.test_df[1:]:
-            data_set.concatenate(self.make_dataset(df))
-        return data_set
+    def get_test(self, idx=0):
+        dataset = self.make_dataset(self.test_df[idx], shuffle=False, stride=24, batch_size=10000)
+        test = list(dataset.as_numpy_iterator())[0]
+        return test[0], test[1]
 
     @property
     def example(self):

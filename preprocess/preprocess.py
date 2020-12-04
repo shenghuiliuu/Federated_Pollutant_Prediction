@@ -40,22 +40,29 @@ def load_by_year(year=2019, dir=utils.ALL_DIR):
 
 # Replacing missing values.
 def replace_missing_value(station):
-    for time in station.index:
-        for feature in station.columns:
-            if pd.isna(station.loc[time, feature]):
-                pre_time = time
-                while pd.isna(station.loc[pre_time, feature]) and pre_time != station.index[0]:
-                    pre_time -= pd.to_timedelta("01:00:00")
+    
+    for feature in station.columns:
+        time = station.index[0]
+        end_time = station.index[-1]
+        while time < end_time:
+            if time in station.index and pd.isna(station.loc[time, feature]):
                 aft_time = time
-                while pd.isna(station.loc[aft_time, feature]) and aft_time != station.index[-1]:
+                while aft_time in station.index and pd.isna(station.loc[aft_time, feature]):
                     aft_time += pd.to_timedelta("01:00:00")
-                if pd.isna(station.loc[aft_time, feature]):
-                    value = station.loc[pre_time, feature]
-                elif pd.isna(station.loc[pre_time, feature]):
-                    value = station.loc[aft_time, feature]
+                if aft_time - time > pd.to_timedelta("5:00:00"):
+                    station.drop(station[(station.index >= time) & (station.index < aft_time)].index, inplace=True)
+                    time = aft_time
+                elif aft_time in station.index:
+                    station.loc[time, feature] = station.loc[aft_time, feature]
+                    time += pd.to_timedelta("01:00:00")
                 else:
-                    value = (station.loc[pre_time, feature] + station.loc[aft_time, feature]) / 2
-                station.loc[time, feature] = value
+                    station.drop(index=time, inplace=True)
+                    time += pd.to_timedelta("01:00:00")
+                
+            else:
+                time += pd.to_timedelta("01:00:00")
+        if pd.isna(station.loc[end_time, feature]):
+            station.loc[end_time, feature] = station.loc[end_time - pd.to_timedelta("01:00:00"), feature]
     return station
 
 
@@ -79,7 +86,7 @@ def preprocess_data(csv_path):
     station.drop(columns=["Slut"], inplace=True)
 
     # Drop rows where "PM2.5" are missing from the beginning
-    idx = station["PM2.5"].first_valid_index()
+    idx = max(station[col].first_valid_index() for col in [station.columns])
     station = station.truncate(before=idx)
 
     station = replace_missing_value(station)
@@ -105,7 +112,7 @@ def concat_by_years(years=(2017, 2018, 2019)):
 
 if __name__ == "__main__":
     years = range(2014, 2020)
-    download(years=years)
+    # download(years=years)
     for year in years:
         for dir in [utils.ALL_DIR, utils.PRE_DIR]:
             des_dir = os.path.join(dir, str(year))
