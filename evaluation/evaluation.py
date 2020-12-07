@@ -1,6 +1,7 @@
+import glob
 import os
 import sys
-import glob
+
 sys.path.append('../preprocess/')
 import utils
 import numpy as np

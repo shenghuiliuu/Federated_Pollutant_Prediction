@@ -6,7 +6,6 @@ from shutil import rmtree
 import pandas as pd
 
 import utils
-from download_data import download
 
 
 def remove_comments(csv_path):

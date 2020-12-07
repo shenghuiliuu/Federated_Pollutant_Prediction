@@ -1,11 +1,12 @@
 import os
 from io import StringIO
 
+import numpy as np
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from scipy.spatial import distance
-import numpy as np
+
 import utils
 from preprocess import replace_missing_value
 

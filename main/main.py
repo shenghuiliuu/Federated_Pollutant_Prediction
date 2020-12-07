@@ -11,7 +11,8 @@ from dataset_generator import WindowGenerator
 import matplotlib.pyplot as plt
 import pandas as pd
 from shutil import rmtree
-from tensorflow.keras.layers import Dense, LSTM, Reshape
+from tensorflow.keras.layers import Dense, LSTM
+
 # %%
 
 stations = {}
