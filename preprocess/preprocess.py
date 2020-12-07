@@ -49,7 +49,7 @@ def replace_missing_value(station):
                 aft_time = time
                 while aft_time in station.index and pd.isna(station.loc[aft_time, feature]):
                     aft_time += pd.to_timedelta("01:00:00")
-                if aft_time - time > pd.to_timedelta("5:00:00"):
+                if aft_time - time > pd.to_timedelta("12:00:00"):
                     station.drop(station[(station.index >= time) & (station.index < aft_time)].index, inplace=True)
                     time = aft_time
                 elif aft_time in station.index:
@@ -94,7 +94,7 @@ def preprocess_data(csv_path):
     station.to_csv(csv_path.replace(utils.ALL_DIR, utils.PRE_DIR))
 
 
-def concat_by_years(years=(2017, 2018, 2019)):
+def concat_by_years(years):
     for station in utils.STATIONS:
         data_list = []
         for year in years:
@@ -128,3 +128,4 @@ if __name__ == "__main__":
             preprocess_data(file.replace(utils.RAW_DIR, utils.ALL_DIR))
 
     concat_by_years(years)
+    

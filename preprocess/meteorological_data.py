@@ -5,14 +5,12 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from scipy.spatial import distance
-
+import numpy as np
 import utils
 from preprocess import replace_missing_value
 
 entry_point = "https://opendata-download-metobs.smhi.se"
 from utils import *
-
-measurements = {6: "Relative Humidity", 1: "temperature"}
 
 
 def get_data(par, station):
@@ -29,21 +27,23 @@ def get_line_number(phrase, text):
             return i
 
 
-def find_nearest_station(par, long, lag):
-    api = "api/version/1.0/parameter/%d.xml" % (par)
+def get_weather_data(name, key, long, lag):
+    api = "api/version/1.0/parameter/%d.xml" % (key)
     r = requests.get(os.path.join(entry_point, api))
-    # stations = json.loads(r.text)
 
     soup = BeautifulSoup(r.text, 'xml')
-
-    station_id = 0
     min_dist = 1000000
-    best_df = None
+    best_df = pd.DataFrame(
+        data = {name : np.nan, "Start" : pd.date_range('2014-01-01', '2020-01-01', freq='1H', closed='left')}
+     )
+    best_df.index = best_df['Start']
+    stations = list(soup.find_all("station"))
+    stations.sort(key=lambda x : distance.euclidean([long, lag], [float(x.longitude.text), float(x.latitude.text)]))
     for station in (soup.find_all("station")):
         dis = distance.euclidean([long, lag], [float(station.longitude.text), float(station.latitude.text)])
         if int(station.to.text[:4]) > 2019 and dis < 0.7:
             id = int(station.id.text)
-            raw = get_data(par, id)
+            raw = get_data(key, id)
             if "2017-01-01;00:00:00" not in raw or "2017-01-01;01:00:00" not in raw or dis > min_dist:
                 continue
             line_number = get_line_number("Datum", raw)
@@ -61,29 +61,38 @@ def find_nearest_station(par, long, lag):
             df = df[begin_index: end_index]
 
             station_id = int(station.id.text)
+            print(station_id)
             min_dist = dis
-            best_df = df
-    print(station_id)
-    print(best_df.head())
+            if best_df is None:
+                best_df = df
+            else:
+                best_df.fillna(df, inplace=True)
+            
+            
+    print(best_df.describe())
     print(min_dist)
 
     return best_df
 
 
-par, station = 1, 159880
-positions = pd.read_csv('../data/station_long_lat.csv')
-for id in utils.STATIONS:
-    long = positions[positions['Station ID'] == id]["Longitude"].values[0]
-    lag = positions[positions['Station ID'] == id]["Latitude"].values[0]
-    weather_data = find_nearest_station(1, long, lag)
+def main():
+    positions = pd.read_csv('../data/station_long_lat.csv')
+    for id in utils.STATIONS:
+        long = positions[positions['Station ID'] == id]["Longitude"].values[0]
+        lag = positions[positions['Station ID'] == id]["Latitude"].values[0]
+        path = '../data/preprocessed_data/' + str(id) + '.csv'
+        station_data = pd.read_csv(path, index_col=0)
+        station_data.index = pd.to_datetime(station_data.index)
+        station_data = station_data[OUTPUTS]
+        for name, key in utils.METEO_FEATURES.items():
+            weather_data = get_weather_data(name, key, long, lag)
+            print(weather_data.head())
+            
+            station_data = pd.concat([station_data, weather_data], axis=1)
+        station_data = station_data[INPUTS]
+        station_data = replace_missing_value(station_data)
+        station_data.to_csv(path)
+        print(station_data.head())
 
-    print(weather_data.head())
-    path = '../data/preprocessed_data/' + str(id) + '.csv'
-    station_data = pd.read_csv(path)
-    station_data["Start"] = pd.to_datetime(station_data["Start"])
-    station_data = station_data[["Start"] + INPUTS]
-    station_data.set_index("Start", inplace=True)
-    station_data.update(weather_data)
-    station_data = replace_missing_value(station_data)
-    station_data.to_csv(path)
-    print(station_data.head())
+if __name__ == "__main__":
+    main()

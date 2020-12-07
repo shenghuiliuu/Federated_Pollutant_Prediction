@@ -11,7 +11,7 @@ from dataset_generator import WindowGenerator
 import matplotlib.pyplot as plt
 import pandas as pd
 from shutil import rmtree
-
+from tensorflow.keras.layers import Dense, LSTM, Reshape
 # %%
 
 stations = {}
@@ -69,10 +69,10 @@ multi_window = WindowGenerator(input_width=IN_STEPS,
 multi_val_performance = {}
 multi_performance = {}
 
-MAX_EPOCHS = 0
+MAX_EPOCHS = 30
 
 
-def compile_and_fit(model, window, patience=3, recompile=True):
+def compile_and_fit(model, window, patience=5, recompile=True):
     early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
                                                       patience=patience,
                                                       mode='min')
@@ -93,18 +93,11 @@ def compile_and_fit(model, window, patience=3, recompile=True):
     return history
 
 
-# %%
-# model.add(LSTM(50, activation='relu',input_shape=(n_timesteps, n_features)))
-#     model.add(Dense(100, activation='relu'))
-#     model.add(Dense(n_outputs*n_out_features))
 multi_lstm_model = tf.keras.Sequential([
-    # Shape [batch, time, features] => [batch, lstm_units]
-    # Adding more `lstm_units` just overfits more quickly.
-    tf.keras.layers.LSTM(128, return_sequences=False),
-    # Shape => [batch, out_steps*features]
-    tf.keras.layers.Dense(OUT_STEPS * NUM_OUTPUTS,
-                          kernel_initializer=tf.initializers.zeros),
-    # Shape => [batch, out_steps, features]
+    Dense(units=256, activation='relu'),
+    LSTM(128, return_sequences=False),
+    Dense(256, activation='relu'),
+    Dense(OUT_STEPS * NUM_OUTPUTS, kernel_initializer=tf.initializers.zeros),
     tf.keras.layers.Reshape([OUT_STEPS, NUM_OUTPUTS])
 ])
 

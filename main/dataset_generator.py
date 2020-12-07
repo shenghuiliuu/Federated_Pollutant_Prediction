@@ -61,7 +61,7 @@ class WindowGenerator():
 
         return inputs, labels
 
-    def make_dataset(self, data, stride=1, batch_size=32, shuffle=True):
+    def make_dataset(self, data, stride=1, batch_size=64, shuffle=True):
         time = data.index[0]
         
         datasets = []
@@ -76,15 +76,16 @@ class WindowGenerator():
             time = time_next
             
             data_block = np.array(data_block, dtype=np.float32)
-            ds = tf.keras.preprocessing.timeseries_dataset_from_array(
-                data=data_block,
-                targets=None,
-                sequence_length=self.total_window_size,
-                sequence_stride=stride,
-                shuffle=shuffle,
-                batch_size=batch_size, )
-    
-            datasets.append(ds)
+            if len(data_block) > 24:
+                ds = tf.keras.preprocessing.timeseries_dataset_from_array(
+                    data=data_block,
+                    targets=None,
+                    sequence_length=self.total_window_size,
+                    sequence_stride=stride,
+                    shuffle=shuffle,
+                    batch_size=batch_size, )
+        
+                datasets.append(ds)
         dataset = datasets[0]
         for df in datasets[1:]:
             dataset = dataset.concatenate(df)
